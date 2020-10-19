@@ -10,8 +10,7 @@ local function placeholder()
 	print( "WARNING: This library is not available on this platform")
 end
 
-lib.init =
-
+lib.init = placeholder
 lib.finishTransaction = placeholder
 lib.loadProducts = placeholder
 lib.purchase = placeholder
