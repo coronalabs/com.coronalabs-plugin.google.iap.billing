@@ -1,5 +1,6 @@
 package plugin.google.iap.billing;
 
+import android.util.Base64;
 import android.util.Log;
 
 import com.android.billingclient.api.AcknowledgePurchaseParams;
@@ -28,6 +29,7 @@ import com.naef.jnlua.LuaState;
 import com.naef.jnlua.LuaType;
 import com.naef.jnlua.NamedJavaFunction;
 
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -335,7 +337,7 @@ public class LuaLoader implements JavaFunction, PurchasesUpdatedListener {
         return 0;
     }
 
-    private int purchaseType(final LuaState L, final String type) {
+    private int purchaseType( LuaState L, final String type) {
         if (!initSuccessful()) {
             Log.w("Corona", "Please call init before trying to purchase products.");
             return 0;
@@ -347,14 +349,49 @@ public class LuaLoader implements JavaFunction, PurchasesUpdatedListener {
         } else {
             sku = null;
         }
-        L.pop(1);
+        final int hashFlags = Base64.NO_PADDING | Base64.URL_SAFE | Base64.NO_CLOSE | Base64.NO_WRAP;
 
         if (sku == null) return 0;
+        final BillingFlowParams.Builder purchaseParams = BillingFlowParams.newBuilder();
+        if(L.isTable(2)) {
+            L.getField(2, "accountId");
+            if(L.type(-1) == LuaType.STRING) {
+                try {
+                    String s = L.toString(-1);
+                    String hashed = Base64.encodeToString(MessageDigest.getInstance("SHA-256").digest(s.getBytes()), hashFlags);
+                    purchaseParams.setObfuscatedAccountId(hashed);
+                } catch (Throwable err) {
+                    Log.e("Corona", "Error while hashing accountId: " + err.toString());
+                }
+            }
+            L.pop(1);
+            L.getField(2, "profileId");
+            if(L.type(-1) == LuaType.STRING) {
+                try {
+                    String s = L.toString(-1);
+                    String hashed = Base64.encodeToString(MessageDigest.getInstance("SHA-256").digest(s.getBytes()), hashFlags);
+                    purchaseParams.setObfuscatedProfileId(hashed);
+                } catch (Throwable err) {
+                    Log.e("Corona", "Error while hashing accountId: " + err.toString());
+                }
+            }
+            L.pop(1);
+            L.getField(2, "obfuscatedAccountId");
+            if(L.type(-1) == LuaType.STRING) {
+                purchaseParams.setObfuscatedAccountId(L.toString(-1));
+            }
+            L.pop(1);
+            L.getField(2, "obfuscatedProfileId");
+            if(L.type(-1) == LuaType.STRING) {
+                purchaseParams.setObfuscatedProfileId(L.toString(-1));
+            }
+            L.pop(1);
+        }
 
         SkuDetails skuDetails = fCachedSKUDetails.get(sku);
 
         if (skuDetails != null) {
-            BillingFlowParams.Builder purchaseParams = BillingFlowParams.newBuilder().setSkuDetails(skuDetails);
+            purchaseParams.setSkuDetails(skuDetails);
             CoronaActivity activity = CoronaEnvironment.getCoronaActivity();
             if (activity != null) {
                 fBillingClient.launchBillingFlow(activity, purchaseParams.build());
@@ -371,7 +408,7 @@ public class LuaLoader implements JavaFunction, PurchasesUpdatedListener {
                         for (SkuDetails details : list) {
                             fCachedSKUDetails.put(details.getSku(), details);
                             if (details.getSku().equals(sku)) {
-                                BillingFlowParams.Builder purchaseParams = BillingFlowParams.newBuilder().setSkuDetails(details);
+                                purchaseParams.setSkuDetails(details);
                                 CoronaActivity activity = CoronaEnvironment.getCoronaActivity();
                                 if (activity != null) {
                                     fBillingClient.launchBillingFlow(activity, purchaseParams.build());
